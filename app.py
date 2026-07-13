@@ -111,7 +111,7 @@ st.markdown("""
 # Helper function to load the trained model
 @st.cache_resource
 def load_model():
-    model_path = "model/healthcare_model.pkl"
+    model_path = "healthcare_model.pkl"
     if os.path.exists(model_path):
         try:
             with open(model_path, 'rb') as file:
