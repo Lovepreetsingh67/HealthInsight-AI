@@ -1,4 +1,4 @@
-# VitalShield - Smart Healthcare Analytics
+# HealthInsight AI - Healthcare Analysis & Risk Prediction
 
 ## Developed by
 Lovepreet Singh
