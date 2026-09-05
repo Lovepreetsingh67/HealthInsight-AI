@@ -42,6 +42,13 @@ FEATURES = [
     "insulin", "pregnancies", "diabetes_pedigree", "cholesterol", "heart_rate",
 ]
 
+# Single source of truth for the history/CSV column order. Every place that
+# reads or writes history.csv (initial creation, migration, appending a new
+# row, and CSV export) uses this exact list so a new row's fields can never
+# land under the wrong header — that column-order mismatch is what was
+# causing patient names/data to look like they'd vanished from older rows.
+HISTORY_COLUMNS = ["timestamp", "patient_name"] + FEATURES + ["risk_level", "risk_percentage"]
+
 FEATURE_META = {
     "age":               {"label": "Age",              "unit": "years",   "min": 1,    "max": 120,  "default": 35,   "step": 1,    "icon": "🎂",
                            "help": "The patient's age in completed years."},
@@ -251,10 +258,34 @@ st.markdown("""
         padding: 4px 13px; border-radius: 20px; font-weight: 700; font-size: 0.82rem; margin-bottom: 0.4rem;
     }
 
+    /* ---------- TOOLTIPS (the "?" help icon next to inputs) ---------- */
+    /* By default Streamlit's tooltip popup can get clipped or stay narrow,
+       so on smaller screens the hint text wraps awkwardly or gets cut off.
+       These rules make the full hint readable on both hover (desktop) and
+       tap (mobile), and let it wrap instead of overflowing the screen. */
+    div[data-testid="stTooltipContent"],
+    div[data-testid="stTooltipHoverTarget"] + div,
+    [data-baseweb="tooltip"] {
+        max-width: 340px !important;
+        width: max-content !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        line-height: 1.45 !important;
+        font-size: 0.85rem !important;
+        z-index: 9999 !important;
+        padding: 10px 12px !important;
+    }
+    div[data-testid="stTooltipIcon"], div[data-testid="stTooltipHoverTarget"] {
+        cursor: pointer;
+    }
+
     /* ---------- MOBILE RESPONSIVENESS ---------- */
     /* The hero title/subtitle already use clamp() for fluid sizing; these
        rules handle everything else so the app stays usable on phone screens
        instead of cards overflowing or text getting cramped. */
+    @media (max-width: 900px) {
+        .stat-strip {gap: 1.4rem;}
+    }
     @media (max-width: 640px) {
         .block-container {padding-left: 0.8rem; padding-right: 0.8rem; padding-top: 1.2rem;}
         .hero {padding: 1.8rem 1.4rem; border-radius: 16px;}
@@ -266,6 +297,14 @@ st.markdown("""
         .kpi-card {padding: 0.9rem 1rem;}
         .kpi-card .value {font-size: 1.3rem;}
         .diet-card .diet-title {font-size: 0.95rem;}
+        div[data-testid="stTooltipContent"], [data-baseweb="tooltip"] {
+            max-width: 240px !important;
+            font-size: 0.8rem !important;
+        }
+    }
+    @media (max-width: 400px) {
+        .hero h1 {font-size: 1.5rem !important;}
+        .stat-strip {flex-direction: column; gap: 0.6rem;}
     }
     img {max-width: 100%; height: auto;}
 </style>
@@ -293,6 +332,17 @@ if st.session_state.dark_mode:
         div[data-testid="stMetricValue"], div[data-testid="stMetricLabel"] {color: #e2e8f0 !important;}
         .calc-panel {background: #1e293b !important; border-color: #0d9488 !important;}
         .disclaimer-banner {background: #422006 !important; border-color: #92400e !important; color: #fed7aa !important;}
+        .tip-item {background: #0f2e1c !important; color: #bbf7d0 !important;}
+        .tip-item.warn {background: #3a2a08 !important; color: #fde68a !important;}
+        .tip-item.danger {background: #3a1212 !important; color: #fecaca !important;}
+        .diet-badge-danger {background:#4c1414 !important; color:#fecaca !important;}
+        .diet-badge-warn {background:#3f2e06 !important; color:#fde68a !important;}
+        .diet-badge-good {background:#0f2e1c !important; color:#bbf7d0 !important;}
+        .patient-badge {background:#1e1b4b !important; color:#c7d2fe !important;}
+        div[data-testid="stTooltipContent"], [data-baseweb="tooltip"] {
+            background: #1e293b !important; color: #e2e8f0 !important;
+            border: 1px solid #334155 !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -309,25 +359,43 @@ def load_model():
 def load_history():
     """Not cached on purpose: history.csv is appended to on every new
     assessment, so a fresh read is needed each session to avoid showing
-    stale data to a new user/browser session."""
+    stale data to a new user/browser session.
+
+    patient_name is explicitly kept as a clean string column here (never
+    NaN/blank-as-missing) — otherwise a name typed for one patient could
+    read back as NaN on the next load and appear to "disappear" from the
+    Assessment Log / CSV export."""
     if os.path.exists(HISTORY_PATH):
         df = pd.read_csv(HISTORY_PATH, parse_dates=["timestamp"])
         if "patient_name" not in df.columns:
             df["patient_name"] = ""
-        return df
-    return pd.DataFrame(columns=["timestamp", "patient_name"] + FEATURES + ["risk_level", "risk_percentage"])
+        df["patient_name"] = df["patient_name"].fillna("").astype(str).str.strip()
+        # Make sure every expected column exists and is in a consistent
+        # order, regardless of how the file on disk happens to be arranged.
+        for col in HISTORY_COLUMNS:
+            if col not in df.columns:
+                df[col] = "" if col == "patient_name" else pd.NA
+        return df[HISTORY_COLUMNS]
+    return pd.DataFrame(columns=HISTORY_COLUMNS)
 
 
 def ensure_history_file():
     if not os.path.exists(HISTORY_PATH):
-        pd.DataFrame(columns=["timestamp", "patient_name"] + FEATURES + ["risk_level", "risk_percentage"]).to_csv(HISTORY_PATH, index=False)
+        pd.DataFrame(columns=HISTORY_COLUMNS).to_csv(HISTORY_PATH, index=False)
         return
-    # Migrate older history files that predate the patient_name column, so a
-    # new row's columns don't end up misaligned with the existing header.
+    # Migrate older history files (missing columns, or columns in the wrong
+    # order) so a newly-appended row always lines up with the header —
+    # a mismatch here is what makes existing rows' data look shifted or lost.
     existing_header = pd.read_csv(HISTORY_PATH, nrows=0)
-    if "patient_name" not in existing_header.columns:
+    if list(existing_header.columns) != HISTORY_COLUMNS:
         full = pd.read_csv(HISTORY_PATH)
-        full.insert(1, "patient_name", "")
+        if "patient_name" not in full.columns:
+            full.insert(1, "patient_name", "")
+        full["patient_name"] = full["patient_name"].fillna("").astype(str).str.strip()
+        for col in HISTORY_COLUMNS:
+            if col not in full.columns:
+                full[col] = ""
+        full = full[HISTORY_COLUMNS]
         full.to_csv(HISTORY_PATH, index=False)
 
 
@@ -547,8 +615,10 @@ def generate_diet_plan(inputs):
     else:
         plans.append({
             "severity": "good", "icon": "🍬", "title": "Balanced Blood-Sugar Maintenance",
-            "eat": ["Continue a mixed diet of whole grains, vegetables & lean protein", "Stay hydrated with water over sugary drinks"],
-            "avoid": ["Excess added sugar"],
+            "eat": ["Whole grains — oats, brown rice, whole wheat roti/bread", "Vegetables — spinach, carrots, beans, cucumber, tomato",
+                    "Fresh fruits in moderation — apple, guava, orange, papaya", "Lean protein — dal, eggs, chicken, fish, paneer",
+                    "Plain water instead of sugary drinks"],
+            "avoid": ["Excess added sugar — sweets, cold drinks, packaged juice", "Deep-fried snacks"],
         })
 
     bp = inputs["blood_pressure"]
@@ -568,8 +638,10 @@ def generate_diet_plan(inputs):
     else:
         plans.append({
             "severity": "good", "icon": "💓", "title": "Heart-Healthy Maintenance Diet",
-            "eat": ["Continue a low-sodium, vegetable-rich diet", "Regular hydration"],
-            "avoid": ["Excess processed sodium"],
+            "eat": ["Vegetables — spinach, tomato, broccoli, beans, carrots", "Whole grains — oats, brown rice, whole wheat roti",
+                    "Fruits — banana, orange, papaya, watermelon", "Herbs & spices instead of extra salt",
+                    "Plenty of plain water through the day"],
+            "avoid": ["Extra table salt & salty pickles", "Packaged/processed snacks (chips, namkeen)"],
         })
 
     chol = inputs["cholesterol"]
@@ -589,8 +661,10 @@ def generate_diet_plan(inputs):
     else:
         plans.append({
             "severity": "good", "icon": "🩸", "title": "Healthy Cholesterol Maintenance",
-            "eat": ["Continue a fiber-rich, plant-forward diet"],
-            "avoid": ["Excess saturated fat"],
+            "eat": ["Oats & whole grains — oats, brown rice, whole wheat roti", "Vegetables & fruits — spinach, carrots, apple, guava",
+                    "Nuts in moderation — almonds, walnuts", "Healthy protein — dal, fish, eggs, tofu, paneer",
+                    "Olive/mustard oil in place of extra butter or ghee"],
+            "avoid": ["Excess butter, ghee & full-fat cream", "Fried food & fast food"],
         })
 
     bmi = inputs["bmi"]
@@ -615,8 +689,10 @@ def generate_diet_plan(inputs):
     else:
         plans.append({
             "severity": "good", "icon": "⚖️", "title": "Healthy Weight Maintenance Diet",
-            "eat": ["Continue balanced meals with regular activity"],
-            "avoid": ["Excess processed snacking"],
+            "eat": ["Balanced plate — half vegetables, quarter protein, quarter whole grains", "Vegetables — spinach, beans, cucumber, tomato, carrots",
+                    "Fruits — apple, banana, papaya, orange", "Protein — dal, eggs, paneer, chicken, fish",
+                    "Water instead of sugary/cold drinks"],
+            "avoid": ["Excess processed snacking (chips, biscuits)", "Late-night heavy meals"],
         })
 
     return plans
@@ -947,8 +1023,8 @@ elif page == "Risk Prediction":
     with st.form("prediction_form"):
         st.markdown('<div class="section-card"><h3>🩺 Patient Details</h3></div>', unsafe_allow_html=True)
         patient_name = st.text_input(
-            "Patient Name / ID (optional)", placeholder="e.g. Rahul Sharma or Patient #204",
-            help="Optional — lets you track this person's trends separately over time.",
+            "Patient Name *", placeholder="e.g. Rahul Sharma",
+            help="Required — used to track this patient's trends separately over time.",
         )
 
         st.markdown('<div class="section-card"><h3>👤 Demographics & History</h3></div>', unsafe_allow_html=True)
@@ -988,12 +1064,15 @@ elif page == "Risk Prediction":
         st.rerun()
 
     if submitted:
+        patient_name = patient_name.strip()
         inputs = {
             "age": age, "bmi": bmi, "glucose": glucose, "blood_pressure": blood_pressure,
             "skin_thickness": skin_thickness, "insulin": insulin, "pregnancies": pregnancies,
             "diabetes_pedigree": diabetes_pedigree, "cholesterol": cholesterol, "heart_rate": heart_rate,
         }
-        if not MODEL_LOADED:
+        if not patient_name:
+            st.error("⚠️ Patient Name is required — please enter a name before running the assessment.")
+        elif not MODEL_LOADED:
             st.error("The prediction model could not be loaded. Please check healthcare_model.pkl.")
         else:
             with st.spinner("🔬 Analyzing patient data..."):
@@ -1022,10 +1101,14 @@ elif page == "Risk Prediction":
                 **inputs,
                 "risk_level": 1 if pct >= 50 else 0,
                 "risk_percentage": round(pct, 1),
-            }])
-            st.session_state.records = pd.concat([st.session_state.records, new_row], ignore_index=True)
+            }])[HISTORY_COLUMNS]  # explicit column order — keeps every row aligned with the CSV header
+            st.session_state.records = pd.concat(
+                [st.session_state.records, new_row], ignore_index=True
+            )[HISTORY_COLUMNS]
 
             # Persist to disk so history survives across sessions/restarts.
+            # ensure_history_file() re-aligns the on-disk header/columns
+            # first, so this append can never land under the wrong column.
             ensure_history_file()
             new_row.to_csv(HISTORY_PATH, mode="a", header=False, index=False)
 
@@ -1236,8 +1319,9 @@ elif page == "About":
     indicators such as BMI, glucose, blood pressure, cholesterol and heart rate.
 
     **How it works**
-    1. Enter patient metrics on the **Risk Prediction** page — optionally with a patient name/ID,
-       and a built-in **BMI calculator** if you only know height and weight.
+    1. Enter the patient's name and metrics on the **Risk Prediction** page — the name is required
+       so every result can be tracked correctly — plus a built-in **BMI calculator** if you only
+       know height and weight.
     2. The model returns a probability-based risk score, shown with KPI cards, a color-coded gauge,
        and — when a previous check exists — a **change indicator** on each metric.
     3. A **"What Influences This Prediction"** panel shows which factors the model weighs most heavily.
