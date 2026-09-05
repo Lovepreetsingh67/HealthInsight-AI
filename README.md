@@ -1,113 +1,77 @@
-🩺 HealthInsight AI - Healthcare Analysis & Risk Prediction
-An AI-powered Healthcare Analysis & Risk Prediction System built using Machine Learning and Streamlit. The application analyzes patient health parameters, predicts health risk using a Random Forest model, and provides personalized health insights.
+🩺 HealthInsight AI — Healthcare Analysis & Risk Prediction
 
-📌 Project Overview
-HealthInsight AI is an intelligent healthcare application that predicts an individual's health risk based on medical parameters such as Age, BMI, Blood Pressure, Glucose Level, Insulin, Skin Thickness, Diabetes Pedigree Function, and Pregnancies.
+A professional, multi-section Streamlit dashboard that uses a trained RandomForestClassifier to estimate a patient's health risk from common clinical indicators, and turns that result into an easy-to-understand, personalized diet & lifestyle plan.
 
-The project is designed to assist users by providing:
+🔗 GitHub Repo: github.com/Lovepreetsingh67/HealthInsight-AI
 
-Health Risk Prediction
-Risk Probability Score
-Personalized Diet Recommendations
-Weekly Health Analytics Dashboard
-Downloadable PDF Report
+📖 About the Project
+
+HealthInsight AI is a healthcare analysis and risk prediction system built around a trained Random Forest classifier. A user enters a patient's basic clinical details — age, BMI, glucose, blood pressure, cholesterol, heart rate, and a few other indicators — and the app instantly returns:
+
+A risk score (Low / Moderate / High) with a clear visual gauge
+KPI cards showing how each key metric compares to the patient's last check
+Health tips written in plain, easy-to-understand language
+A personalized diet plan — real, specific foods to eat or limit based on the patient's results
+A history log of every past assessment, with trend charts and CSV export
+A downloadable PDF report for each result
+Dark mode / Light mode, and a layout that adapts to both mobile and desktop
+
+The goal is to make health-risk screening approachable — not just a number, but clear guidance a patient can actually act on.
+
 ✨ Features
-🤖 Machine Learning-based Health Risk Prediction
-📊 Risk Probability Score (%)
-🥗 Personalized Diet Recommendations
-📈 Weekly Health Analytics Dashboard
-🌙 Dark Mode Support
-📄 Downloadable PDF Health Report
-📝 Assessment History Tracking
-⚡ Fast and User-Friendly Interface
-📱 Responsive Streamlit UI
-🛠 Technologies Used
-Python
-Streamlit
-Scikit-learn
-Pandas
-NumPy
-Matplotlib
-Seaborn
-Joblib
-🧠 Machine Learning Model
-Algorithm Used
+AI-Powered Risk Prediction — Random Forest model trained on real clinical health indicators
+Interactive Patient Form — form organized by category (Demographics, Vitals, Lab Results), with a built-in BMI calculator
+Visual Risk Meter — color-coded gauge plus KPI cards with change-vs-last-check indicators
+Personalized Diet Plans — condition-specific, understandable food guidance generated from glucose, blood pressure, cholesterol and BMI
+Health Tips Panel — plain-language tips tailored to each metric
+Trends & History — charts of past assessments, filterable by patient, with CSV export
+PDF Reports — download a full, shareable PDF summary of any assessment
+Dark Mode / Light Mode — toggle from the sidebar
+Responsive Layout — works on both mobile and desktop, with full tooltip hints on tap/hover
 
-Random Forest Classifier
-The trained model predicts healthcare risk based on patient health parameters and provides the probability of prediction.
 
+Home	Risk Prediction	Trends & History
+Show Image	Show Image	Show Image
+🛠️ Tech Stack
+Streamlit — web app framework
+scikit-learn — Random Forest model (loaded from a pre-trained .pkl file)
+Matplotlib & Seaborn — charts and visualizations
+pandas — data handling & history log
+fpdf2 — PDF report generation
+streamlit-option-menu (optional) — sidebar navigation menu
 📂 Project Structure
-HealthInsight-AI/
-│
-├── app.py
-├── healthcare_model.pkl
-├── history.csv
-├── requirements.txt
-├── test_healthcare_data.csv
-├── README.md
-└── screenshots/
-📋 Input Parameters
-The model takes the following health parameters:
+├── app.py                 # Main Streamlit application
+├── healthcare_model.pkl   # Trained RandomForestClassifier (model + feature list)
+├── history.csv            # Auto-created — stores past assessments (persists across sessions)
+└── README.md
 
-Age
-Pregnancies
-Glucose Level
-Blood Pressure
-Skin Thickness
-Insulin
-BMI
-Diabetes Pedigree Function
-🚀 Installation
-Clone the repository
 
-git clone https://github.com/yourusername/HealthInsight-AI.git
-Move into the project folder
-
+🚀 Running the App
+bash
+git clone https://github.com/Lovepreetsingh67/HealthInsight-AI.git
 cd HealthInsight-AI
-Install dependencies
-
-pip install -r requirements.txt
-Run the application
-
 streamlit run app.py
-📊 Output
-The application provides:
 
-Predicted Health Risk
-Risk Probability
-Health Status
-Personalized Diet Suggestions
-Weekly Analytics Dashboard
-Downloadable PDF Report
-📷 Screenshots
-Add screenshots here after deployment.
 
-Example:
+📋 Input Fields
+Field	Unit	Description
+Age	years	Patient's age
+BMI	kg/m²	Body Mass Index (or use the built-in calculator)
+Glucose	mg/dL	Fasting blood glucose
+Blood Pressure	mmHg	Systolic blood pressure
+Skin Thickness	mm	Triceps skinfold thickness
+Insulin	mu U/mL	2-hour serum insulin
+Pregnancies	count	Total number of pregnancies
+Diabetes Pedigree	score	Family-history-based diabetes risk score
+Cholesterol	mg/dL	Total blood cholesterol
+Heart Rate	bpm	Resting heart rate
 
-Home Page
-Prediction Page
-Result Page
-Dashboard
-PDF Report
-🔮 Future Improvements
-User Login & Authentication
-Cloud Database Integration
-Doctor Recommendation System
-Email Report Delivery
-Multi-Disease Prediction
-Explainable AI (XAI)
-Mobile Application
-🎯 Project Objectives
-Demonstrate Machine Learning in Healthcare
-Predict health risks using patient data
-Provide meaningful healthcare insights
-Improve awareness through data visualization
-📄 License
-This project is licensed under the MIT License.
+Patient Name is required for every assessment so results can be tracked correctly per patient across visits.
 
-👨‍💻 Developed By
+⚠️ Disclaimer
+
+This application is intended for educational and informational purposes only. It does not provide medical diagnoses and should never replace consultation with a qualified healthcare professional.
+
+👤 Developed By
+
 Lovepreet Singh
-
-BCA Student | AI & Machine Learning Enthusiast
-
-⭐ If you found this project useful, don't forget to Star this repository!
